@@ -101,7 +101,7 @@ resource "google_sql_database_instance" "main" {
     }
   }
 
-  deletion_protection = false
+  deletion_protection = true
 
   depends_on = [google_project_service.required]
 }
@@ -121,6 +121,10 @@ resource "google_sql_user" "app" {
   instance = google_sql_database_instance.main[0].name
   name     = var.sql_user_name
   password = random_password.sql_password[0].result
+
+  lifecycle {
+    ignore_changes = [password]
+  }
 }
 
 resource "google_vpc_access_connector" "run" {
@@ -171,7 +175,7 @@ resource "google_cloud_run_v2_service" "api" {
   name     = var.run_service_name
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
-  deletion_protection = false
+  deletion_protection = true
 
   template {
     service_account = google_service_account.run_runtime.email
@@ -206,7 +210,17 @@ resource "google_cloud_run_v2_service" "api" {
 
       env {
         name  = "USE_MOCK_LIVE_AGENT"
-        value = "true"
+        value = "false"
+      }
+
+      env {
+        name  = "USE_MOCK_STORAGE_PROVIDER"
+        value = "false"
+      }
+
+      env {
+        name  = "USE_MOCK_IMAGE_PROVIDER"
+        value = "false"
       }
 
       env {
@@ -224,15 +238,12 @@ resource "google_cloud_run_v2_service" "api" {
         value = local.final_redis_url
       }
 
-      dynamic "env" {
-        for_each = var.google_api_key == "" ? [] : [1]
-        content {
-          name = "GOOGLE_API_KEY"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.google_api_key.secret_id
-              version = "latest"
-            }
+      env {
+        name = "GOOGLE_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_api_key.secret_id
+            version = "latest"
           }
         }
       }
