@@ -1,0 +1,1 @@
+export const GENERATE_IMAGE_QUEUE = Symbol('GENERATE_IMAGE_QUEUE');

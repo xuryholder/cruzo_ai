@@ -1,0 +1,250 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GenerationStatus {
+  queued
+  processing_image
+  completed
+  failed
+  canceled
+}
+
+enum CreditLedgerType {
+  grant
+  debit
+  refund
+}
+
+enum ContactRelationship {
+  family
+  friend
+  colleague
+  client
+  partner
+  acquaintance
+  other
+}
+
+enum ContactTone {
+  formal
+  semi_formal
+  friendly
+  warm
+  playful
+  neutral
+}
+
+enum ContactSource {
+  manual_test
+  manual
+  google_contacts
+  google_calendar
+  gmail_parse
+  linkedin_extension
+  facebook_extension
+  import_csv
+}
+
+enum MessageDraftStatus {
+  draft
+  approved
+  sent
+  failed
+}
+
+enum MessageChannel {
+  email
+  telegram
+  whatsapp
+  instagram
+  facebook
+  manual
+}
+
+enum MessageLogAction {
+  generated
+  edited
+  approved
+  send_requested
+  send_attempt
+  sent
+  send_failed
+  marked_sent
+  deleted
+}
+
+enum MessageLogStatus {
+  success
+  failed
+}
+
+model Session {
+  id              String         @id @default(uuid())
+  fingerprintHash String?        @map("fingerprint_hash")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  lastSeenAt      DateTime       @updatedAt @map("last_seen_at")
+  credits         Credit?
+  ledgers         CreditLedger[]
+  generations     Generation[]
+  preferences     UserPreference?
+
+  @@map("sessions")
+}
+
+model Credit {
+  sessionId String   @id @map("session_id")
+  balance   Int
+  updatedAt DateTime @updatedAt @map("updated_at")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("credits")
+}
+
+model CreditLedger {
+  id             String           @id @default(cuid())
+  sessionId      String           @map("session_id")
+  generationId   String?          @map("generation_id")
+  type           CreditLedgerType
+  amount         Int
+  idempotencyKey String           @unique @map("idempotency_key")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  session        Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  generation     Generation?      @relation(fields: [generationId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([generationId])
+  @@map("credit_ledger")
+}
+
+model Generation {
+  id          String           @id @default(cuid())
+  sessionId   String           @map("session_id")
+  prompt      String
+  style       String
+  aspectRatio String           @map("aspect_ratio")
+  status      GenerationStatus
+  errorCode   String?          @map("error_code")
+  imageUrl    String?          @map("image_url")
+  videoUrl    String?          @map("video_url")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ledgers     CreditLedger[]
+
+  @@index([sessionId])
+  @@index([status])
+  @@map("generations")
+}
+
+model UserPreference {
+  sessionId    String  @id @map("session_id")
+  defaultTone  String? @map("default_tone")
+  defaultStyle String? @map("default_style")
+  session      Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model User {
+  id               String                @id
+  email            String
+  timezone         String                @default("UTC")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  contacts         Contact[]
+  messageDrafts    MessageDraft[]
+  messageLogs      MessageLog[]
+  idempotencyKeys  ManualIdempotencyKey[]
+
+  @@map("users")
+}
+
+model Contact {
+  id              String              @id @default(cuid())
+  userId          String              @map("user_id")
+  name            String?
+  email           String?
+  emailNormalized String?             @map("email_normalized")
+  birthdayDate    DateTime            @map("birthday_date") @db.Date
+  relationship    ContactRelationship @default(other)
+  tone            ContactTone         @default(neutral)
+  source          ContactSource
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageDrafts   MessageDraft[]
+  messageLogs     MessageLog[]
+
+  @@index([userId, createdAt])
+  @@index([userId, updatedAt])
+  @@index([userId, birthdayDate])
+  @@unique([userId, emailNormalized])
+  @@map("contacts")
+}
+
+model MessageDraft {
+  id         String             @id @default(cuid())
+  userId     String             @map("user_id")
+  contactId  String             @map("contact_id")
+  subject    String
+  text       String
+  status     MessageDraftStatus @default(draft)
+  channel    MessageChannel?
+  language   String             @default("en")
+  tone       ContactTone        @default(neutral)
+  maxWords   Int                @default(100) @map("max_words")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messageLogs MessageLog[]
+  idempotencyKeys ManualIdempotencyKey[]
+
+  @@index([userId, status, createdAt])
+  @@index([userId, createdAt])
+  @@index([userId, updatedAt])
+  @@index([contactId])
+  @@map("message_drafts")
+}
+
+model MessageLog {
+  id                String           @id @default(cuid())
+  userId            String           @map("user_id")
+  contactId         String           @map("contact_id")
+  draftId           String?          @map("draft_id")
+  action            MessageLogAction
+  status            MessageLogStatus
+  channel           MessageChannel?
+  externalMessageId String?          @map("external_message_id")
+  error             String?
+  notes             String?
+  timestamp         DateTime         @default(now())
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact           Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  draft             MessageDraft?    @relation(fields: [draftId], references: [id], onDelete: SetNull)
+
+  @@index([userId, timestamp])
+  @@index([draftId, timestamp])
+  @@index([contactId, timestamp])
+  @@map("message_logs")
+}
+
+model ManualIdempotencyKey {
+  id             String         @id @default(cuid())
+  userId         String         @map("user_id")
+  idempotencyKey String         @map("idempotency_key")
+  draftId        String         @map("draft_id")
+  channel        MessageChannel
+  createdAt      DateTime       @default(now()) @map("created_at")
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  draft          MessageDraft   @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([draftId])
+  @@map("manual_idempotency_keys")
+}

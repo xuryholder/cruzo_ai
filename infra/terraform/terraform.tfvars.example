@@ -1,0 +1,19 @@
+project_id      = "greeting-ai-agent"
+region          = "us-central1"
+container_image = "us-central1-docker.pkg.dev/greeting-ai-agent/cruzo/cruzo-api:latest"
+
+# Keep true for initial stabilization day.
+# After validation, set false in Cloud Run env for real Gemini path.
+# (Terraform currently provisions Cloud Run with USE_MOCK_LIVE_AGENT=true by default.)
+
+# Managed infra path (recommended for hackathon demo)
+use_managed_sql   = true
+use_managed_redis = true
+sql_edition       = "ENTERPRISE"
+
+# Optional overrides: if set, they take precedence over managed URLs.
+database_url = ""
+redis_url    = ""
+
+google_api_key = ""
+gcs_bucket     = ""

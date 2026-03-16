@@ -1,0 +1,8 @@
+{
+  "name": "cruzo-ai",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

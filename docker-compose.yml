@@ -1,0 +1,136 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: cruzo-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:4000}
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "3000:3000"
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: cruzo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cruzo_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cruzo_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: cruzo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: cruzo-api
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cruzo_ai
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_IMAGE_MODEL: ${OPENAI_IMAGE_MODEL:-gpt-image-1}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-openai}
+      FAL_API_KEY: ${FAL_API_KEY:-}
+      FAL_IMAGE_MODEL: ${FAL_IMAGE_MODEL:-fal-ai/flux/dev}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-gemini-2.5-flash}
+      GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-gemini-2.5-flash-native-audio-preview-12-2025}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-greeting-ai-agent}
+      GCS_BUCKET: ${GCS_BUCKET:-}
+      LIVE_SESSION_TTL_SEC: ${LIVE_SESSION_TTL_SEC:-3600}
+      USE_MOCK_LIVE_AGENT: ${USE_MOCK_LIVE_AGENT:-true}
+      USE_MOCK_STORAGE_PROVIDER: ${USE_MOCK_STORAGE_PROVIDER:-true}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_REGION: ${R2_REGION:-auto}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-cruzo-ai-assets}
+      RATE_LIMIT_SESSION_PER_MINUTE: ${RATE_LIMIT_SESSION_PER_MINUTE:-5}
+      RATE_LIMIT_IP_PER_HOUR: ${RATE_LIMIT_IP_PER_HOUR:-30}
+      ENABLE_PROMPT_MODERATION: ${ENABLE_PROMPT_MODERATION:-true}
+      DEFAULT_FREE_CREDITS: ${DEFAULT_FREE_CREDITS:-20}
+      QUEUE_NAME_GENERATE_IMAGE: ${QUEUE_NAME_GENERATE_IMAGE:-generate-image}
+      ASSETS_SIGNED_URL_TTL_SECONDS: ${ASSETS_SIGNED_URL_TTL_SECONDS:-86400}
+      USE_MOCK_IMAGE_PROVIDER: ${USE_MOCK_IMAGE_PROVIDER:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    command: sh -c "npx prisma migrate deploy && node dist/main.js"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: cruzo-worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cruzo_ai
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_IMAGE_MODEL: ${OPENAI_IMAGE_MODEL:-gpt-image-1}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-openai}
+      FAL_API_KEY: ${FAL_API_KEY:-}
+      FAL_IMAGE_MODEL: ${FAL_IMAGE_MODEL:-fal-ai/flux/dev}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-gemini-2.5-flash}
+      GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-gemini-2.5-flash-native-audio-preview-12-2025}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-greeting-ai-agent}
+      GCS_BUCKET: ${GCS_BUCKET:-}
+      LIVE_SESSION_TTL_SEC: ${LIVE_SESSION_TTL_SEC:-3600}
+      USE_MOCK_LIVE_AGENT: ${USE_MOCK_LIVE_AGENT:-true}
+      USE_MOCK_STORAGE_PROVIDER: ${USE_MOCK_STORAGE_PROVIDER:-true}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_REGION: ${R2_REGION:-auto}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-cruzo-ai-assets}
+      RATE_LIMIT_SESSION_PER_MINUTE: ${RATE_LIMIT_SESSION_PER_MINUTE:-5}
+      RATE_LIMIT_IP_PER_HOUR: ${RATE_LIMIT_IP_PER_HOUR:-30}
+      ENABLE_PROMPT_MODERATION: ${ENABLE_PROMPT_MODERATION:-true}
+      DEFAULT_FREE_CREDITS: ${DEFAULT_FREE_CREDITS:-20}
+      QUEUE_NAME_GENERATE_IMAGE: ${QUEUE_NAME_GENERATE_IMAGE:-generate-image}
+      ASSETS_SIGNED_URL_TTL_SECONDS: ${ASSETS_SIGNED_URL_TTL_SECONDS:-86400}
+      USE_MOCK_IMAGE_PROVIDER: ${USE_MOCK_IMAGE_PROVIDER:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node dist/worker.js"
+
+volumes:
+  postgres_data:

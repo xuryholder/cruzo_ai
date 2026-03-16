@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.gitignore
+.env
+.env.*
+!apps/api/.env.example
+npm-debug.log
+yarn-error.log

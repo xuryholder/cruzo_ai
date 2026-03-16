@@ -1,0 +1,25 @@
+%% Cruzo AI Architecture (source)
+flowchart LR
+  subgraph Web["Frontend (Next.js)"]
+    LiveUI["/live (Gemini Live)"]
+    StudioUI["/studio (Generate)"]
+  end
+
+  subgraph API["Backend (NestJS)"]
+    LiveAPI["/v1/live/*"]
+    GenAPI["/api/studio/generations"]
+  end
+
+  subgraph AI["AI Providers"]
+    Gemini["Gemini (voice + text + image)"]
+  end
+
+  subgraph Data["Data & Jobs"]
+    PG["PostgreSQL"]
+    Redis["Redis + BullMQ"]
+  end
+
+  LiveUI --> LiveAPI --> Gemini
+  StudioUI --> GenAPI --> Gemini
+  API --> PG
+  API --> Redis
