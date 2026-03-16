@@ -763,19 +763,20 @@ export default function LivePage() {
         void audioStreamRef.current?.stop().catch(() => undefined);
       });
 
-      if (level > 0.015) {
+      if (level > 0.01) {
         liveUserHasSpokenRef.current = true;
         if (noSpeechTimerRef.current) {
           window.clearTimeout(noSpeechTimerRef.current);
           noSpeechTimerRef.current = null;
         }
-        if (!speechHardStopTimerRef.current) {
-          speechHardStopTimerRef.current = window.setTimeout(() => {
-            pushDebug('speech_hard_timeout');
-            finalizeLiveAudioTurn();
-            speechHardStopTimerRef.current = null;
-          }, 6500);
+        if (speechHardStopTimerRef.current) {
+          window.clearTimeout(speechHardStopTimerRef.current);
         }
+        speechHardStopTimerRef.current = window.setTimeout(() => {
+          pushDebug('speech_hard_timeout');
+          finalizeLiveAudioTurn();
+          speechHardStopTimerRef.current = null;
+        }, 20000);
         setPhase('user_speaking');
         if (silenceTimerRef.current) {
           window.clearTimeout(silenceTimerRef.current);
@@ -794,7 +795,7 @@ export default function LivePage() {
           finalizeLiveAudioTurn();
           pushDebug('silence_boundary_commit');
           silenceTimerRef.current = null;
-        }, 720);
+        }, 1200);
       }
     });
 
@@ -861,8 +862,6 @@ export default function LivePage() {
     setMicSessionActive(false);
     micSessionActiveRef.current = false;
     liveAudioReadyRef.current = false;
-    liveTurnEndedRef.current = true;
-    bufferedAudioChunksRef.current = [];
     activeTurnAbortRef.current?.abort();
     activeTurnAbortRef.current = null;
     if (silenceTimerRef.current) {
@@ -879,10 +878,18 @@ export default function LivePage() {
     }
 
     if (mode === 'live') {
-      manualDisconnectRef.current = true;
       await audioStreamRef.current?.stop().catch(() => undefined);
       audioStreamRef.current = null;
       setIsListeningMic(false);
+
+      if (liveUserHasSpokenRef.current && !liveTurnEndedRef.current && liveClientRef.current?.getState() === 'ready') {
+        finalizeLiveAudioTurn();
+        return;
+      }
+
+      manualDisconnectRef.current = true;
+      liveTurnEndedRef.current = true;
+      bufferedAudioChunksRef.current = [];
       await liveClientRef.current?.disconnect().catch(() => undefined);
       setPhase('ready');
       return;

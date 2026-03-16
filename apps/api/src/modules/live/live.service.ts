@@ -390,9 +390,47 @@ function buildFallbackTurn(payload: CreateLiveTurnInput): LiveTurnOutput {
   };
 }
 
+const GENERIC_RECIPIENTS = new Set([
+  'friend',
+  'colleague',
+  'teammate',
+  'coworker',
+  'boss',
+  'manager',
+  'doctor',
+  'nurse',
+  'teacher',
+  'coach',
+  'neighbor',
+  'client',
+  'customer',
+  'partner',
+]);
+
+const RECIPIENT_STOP_WORDS = new Set(['my', 'your', 'his', 'her', 'their', 'our']);
+
 function extractRecipient(text: string): string | null {
-  const match = text.match(/for\s+([A-Za-z][A-Za-z\-']{1,40})/i);
-  return match?.[1] || null;
+  const lowered = text.toLowerCase();
+  const possessiveMatch = lowered.match(/\bfor\s+(my|your|his|her|their|our)\s+([a-z][a-z\-']{1,40})/i);
+  if (possessiveMatch) {
+    const role = possessiveMatch[2];
+    if (GENERIC_RECIPIENTS.has(role)) {
+      return `your ${role}`;
+    }
+    return null;
+  }
+
+  const match = lowered.match(/\bfor\s+([a-z][a-z\-']{1,40})/i);
+  if (!match) {
+    return null;
+  }
+
+  const candidate = match[1];
+  if (RECIPIENT_STOP_WORDS.has(candidate) || GENERIC_RECIPIENTS.has(candidate)) {
+    return null;
+  }
+
+  return match[1];
 }
 
 function chunkText(text: string, chunkSize: number): string[] {
@@ -470,18 +508,19 @@ function resolveGreetingLead(
   occasion: 'birthday' | 'christmas' | 'holiday' | 'congrats' | 'celebration',
   recipient: string,
 ): string {
+  const generic = recipient.startsWith('your ');
   switch (occasion) {
     case 'christmas':
-      return `Merry Christmas, ${recipient}!`;
+      return generic ? 'Merry Christmas!' : `Merry Christmas, ${recipient}!`;
     case 'holiday':
-      return `Warm holiday wishes, ${recipient}!`;
+      return generic ? 'Warm holiday wishes!' : `Warm holiday wishes, ${recipient}!`;
     case 'congrats':
-      return `Congratulations, ${recipient}!`;
+      return generic ? 'Congratulations!' : `Congratulations, ${recipient}!`;
     case 'celebration':
-      return `Celebrating you, ${recipient}!`;
+      return generic ? 'Celebrating you!' : `Celebrating you, ${recipient}!`;
     case 'birthday':
     default:
-      return `Happy Birthday, ${recipient}!`;
+      return generic ? 'Happy Birthday!' : `Happy Birthday, ${recipient}!`;
   }
 }
 
